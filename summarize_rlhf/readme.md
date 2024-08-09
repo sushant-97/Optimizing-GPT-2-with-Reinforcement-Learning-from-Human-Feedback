@@ -44,4 +44,4 @@ pip install -r requirements.txt
 ## References
 
 1. Nisan Stiennon, Long Ouyang, Jeff Wu, Daniel M. Ziegler, Ryan Lowe, Chelsea Voss, Alec Radford, Dario Amodei, Paul Christiano, "[Learning to Summarize from human feedback](https://arxiv.org/abs/2009.01325)", Neural Information Processing Systems, 2020.
-2. Check our blog post for metric logs and other results [here](http://wandb.me/summarize-rlhf-trlx)
+2. Blogpost from weights and biases is referred for this work[here](http://wandb.me/summarize-rlhf-trlx)
