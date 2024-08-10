@@ -152,3 +152,41 @@ def get_configs(name) -> TrainingConfig:
             hf_model="gpt2-xl",
             finetune_method="lora",
         )
+    elif name == "gpt2":
+        return TrainingConfig(
+            n_layers=12,  # GPT-2 base has 12 layers
+            n_heads=12,   # GPT-2 base has 12 attention heads
+            embedding_dim=768,  # GPT-2 base has 768 embedding dimensions
+            dropout_rate=0,
+            use_bias=True,
+            block_size=1024,
+            vocab_size=50257,
+            model_name="gpt2",
+            hf_model="gpt2",
+        )
+    elif name == "gpt2/dropout":
+        return TrainingConfig(
+            n_layers=12,
+            n_heads=16,
+            embedding_dim=768,
+            dropout_rate=0.2,
+            use_bias=True,
+            block_size=1024,
+            vocab_size=50257,
+            model_name="gpt2/dropout",
+            hf_model="gpt2",
+        )
+    elif name == "gpt2/lora":
+        return TrainingConfig(
+            n_layers=12,
+            n_heads=16,
+            embedding_dim=768,
+            dropout_rate=0,
+            use_bias=True,
+            block_size=1024,
+            vocab_size=50257,
+            lora_rank=1,
+            model_name="gpt2/lora",
+            hf_model="gpt2",
+            finetune_method="lora",
+        )

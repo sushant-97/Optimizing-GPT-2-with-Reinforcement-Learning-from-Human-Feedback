@@ -8,8 +8,9 @@ from loss import KPairwiseLoss, CrossEntropyLoss, ValueLoss, PolicyLoss
 import torch.optim as optim
 from torch.cuda.amp.grad_scaler import GradScaler
 import statistics
-from llama import LLaMA
-from gpt import GPTRewardModel, GPT, GPTCritic, TransformerDecoderBlock, GPTActor
+# from llama import LLaMA
+# from gpt import GPTRewardModel, GPT, GPTCritic, TransformerDecoderBlock, GPTActor
+from gpt import GPT
 from tqdm import tqdm, trange
 import time
 from datetime import datetime
