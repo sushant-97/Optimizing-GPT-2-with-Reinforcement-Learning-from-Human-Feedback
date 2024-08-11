@@ -10,7 +10,7 @@ from torch.cuda.amp.grad_scaler import GradScaler
 import statistics
 # from llama import LLaMA
 # from gpt import GPTRewardModel, GPT, GPTCritic, TransformerDecoderBlock, GPTActor
-from gpt import GPT
+from gpt import GPT, GPTRewardModel
 from tqdm import tqdm, trange
 import time
 from datetime import datetime
@@ -163,3 +163,124 @@ class SFTTrainer(Trainer):
             step += 1
 
         self.save_states(step, True)
+
+
+class RewardModelTrainer(Trainer):
+
+    def __init__(self, cfg: TrainingConfig, device, model: nn.Module,
+                 train_dataset, test_dataset) -> None:
+        super().__init__()
+        self.run_name = f"rm_{cfg.exp_name}_{datetime.now().strftime('%Y%m%d%H%M')}"
+        self.device = device
+        assert self.device == 'cuda'
+        self.total_epochs = cfg.total_epochs
+        self.eval_freq = 1
+        self.save_freq = 30000
+        self.model = model
+        self.train_dataloader = DataLoader(train_dataset,
+                                           batch_size=cfg.batch_size,
+                                           num_workers=8,
+                                           shuffle=True,
+                                           pin_memory=True)
+        self.test_dataloader = DataLoader(test_dataset,
+                                          batch_size=cfg.batch_size,
+                                          num_workers=8,
+                                          pin_memory=True)
+        self.model = model
+        self.criterion = KPairwiseLoss()
+        self.finetune_method = cfg.finetune_method
+        self.optimizer = optim.Adam(self.model.parameters(), lr=cfg.lr)
+        self.grad_clip = cfg.grad_clip
+        self.dtype = torch.float16
+
+        hp = {
+            "dtype": str(self.dtype),
+            "train_dataset": type(train_dataset).__name__,
+            "train_dataset_len": len(train_dataset),
+            "test_dataset": type(test_dataset).__name__,
+            "test_dataset_len": len(test_dataset),
+            **cfg.dict(),
+        }
+        self.save_hyperparams(hp)
+
+    
+    def fit(self):
+        
+        #check if LoRA is enabled
+        if self.finetune_method:
+            self.model.freeze_weights(self.finetune_method)
+        summary(self.model, input_data=torch.ones(1,1024).long())
+
+        opt_model = torch.compile(self.model)
+        opt_model.to(self.device)
+        writer = SummaryWriter(f'./runs/{self.run_name}/logs', max_queue=40)
+        scaler = GradScaler(enabled=self.dtype != torch.float32)
+
+        opt_model.train()
+        for epoch in range(self.total_epochs):
+            for step, (completions, attention_masks) in enumerate(pbar := tqdm(self.train_dataloader)):
+                total_steps = step + epoch * len(self.train_dataloader)
+                completions = completions.to(self.device)
+                attention_masks = attention_masks.to(self.device)
+
+                with torch.autocast(device_type=self.device, dtype=self.dtype):
+                    #autocast: operations that benefit from lower precision are executed in float16, while others remain in float32.
+
+                    positive_scores = opt_model(completions[:,0,:],
+                                                attention_masks[:,0,:],) # (B, 1)
+                    negative_scores = opt_model(completions[:,1,:],
+                                                attention_masks[:,1,:],) # (B, 1)
+                    loss = self.criterion((positive_scores, negative_scores), dim=-1)    # (B, 2)
+
+                if self.grad_clip != 0.0:
+                    torch.nn.utils.clip_grad_norm_(opt_model.parameters(),
+                                                   self.grad_clip)
+                
+                scaler.scale(loss).backward()
+                scaler.step(self.optimizer)
+                scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
+                lossf = loss.item()
+                writer.add_scalar('Loss/train/step', lossf, total_steps)
+                pbar.set_description(f"Epoch {epoch}, step {step}, batch loss {round(lossf, 3)}")
+
+                if total_steps != 0 and total_steps % self.save_freq == 0:
+                    self.save_states(total_steps)
+            
+            if epoch % self.eval_freq == 0:
+                opt_model.eval()
+                with torch.no_grad():
+                    tp = 0
+                    total = 0
+                    losses = []
+                    for step, (completions, attention_masks) in enumerate(
+                        self.test_dataloader):
+                        completions = completions.to(self.device)
+                        attention_masks = attention_masks.to(self.device)
+
+                        positive_scores = opt_model(
+                            completions[:, 0, :],
+                            attention_masks[:, 0, :])  # (B, 1)
+                        negative_scores = opt_model(
+                            completions[:, 1, :],
+                            attention_masks[:, 1, :])  # (B, 1)
+                        loss = self.criterion(
+                            torch.cat((positive_scores, negative_scores),
+                                      dim=-1))  # (B, 2)
+                        lossf = loss.item()
+                        losses.append(lossf)
+                        writer.add_scalar(
+                            'Loss/test/step', lossf,
+                            step + epoch * len(self.test_dataloader))
+                        tp += torch.count_nonzero(
+                            positive_scores > negative_scores)
+                        total += positive_scores.shape[0]
+
+                    acc = tp / total
+                    epoch_loss = statistics.mean(losses)
+
+                writer.add_scalar('Loss/test/epoch', epoch_loss, epoch)
+                writer.add_scalar('Acc/test/epoch', acc, epoch)
+                print(f'Epoch: {epoch + 1}, Test Loss: {lossf}, Acc: {acc}')
+
+        self.save_states(total_steps, True)
