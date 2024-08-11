@@ -402,3 +402,79 @@ class GPT(nn.Module):
 
         return idx
 
+
+class GPTRewardModel(nn.Module):
+
+    def __init__(self, cfg: TrainingConfig) -> None:
+        super().__init__()
+        self.cfg = cfg
+        self.backbone = GPT(cfg)
+        self.backbone.lm_head = nn.Identity()
+        # no need for LoRA here as we won't have weights anyway
+        self.value_head = nn.Linear(cfg.embedding_dim, 1, bias=False)
+
+    def forward(self, x: Tensor, attention_mask: Tensor = None):
+        hidden = self.backbone(x, attention_mask)
+        score = self.value_head(hidden).mean(dim=1)
+        return score
+
+    def freeze_weights(self, finetune_method):
+        if finetune_method == "lora" and self.cfg.lora_rank > 0:
+            lora.mark_only_lora_as_trainable(self)
+        elif finetune_method == "last_block":
+            trainable_params = [
+                "backbone.transformer.decoder_blocks.35.mmsa.mask",
+                "backbone.transformer.decoder_blocks.35.mmsa.qkv_projection.weight",
+                "backbone.transformer.decoder_blocks.35.mmsa.qkv_projection.bias",
+                "backbone.transformer.decoder_blocks.35.mmsa.output_projection.weight",
+                "backbone.transformer.decoder_blocks.35.mmsa.output_projection.bias",
+                "backbone.transformer.decoder_blocks.35.ln2.weight",
+                "backbone.transformer.decoder_blocks.35.ln2.bias",
+                "backbone.transformer.decoder_blocks.35.ffn.fc1.weight",
+                "backbone.transformer.decoder_blocks.35.ffn.fc1.bias",
+                "backbone.transformer.decoder_blocks.35.ffn.fc2.weight",
+                "backbone.transformer.decoder_blocks.35.ffn.fc2.bias",
+                "backbone.transformer.ln.weight",
+                "backbone.transformer.ln.bias", "value_head.weight"
+            ]
+            for name, param in self.named_parameters():
+                if name not in trainable_params:
+                    param.requires_grad = False
+                else:
+                    print(f"{name} is trainable.")
+        else:
+            print(
+                f"Unsupported method {finetune_method} (lora rank = {self.cfg.lora_rank})"
+            )
+
+    @classmethod
+    def from_backbone_checkpoint(cls, cfg: TrainingConfig, ckpt_path: str):
+        cfg.pretrain = ckpt_path
+        model = GPTRewardModel(cfg)
+        model.backbone = GPT.from_checkpoint(cfg, ckpt_path)
+        model.backbone.lm_head = nn.Identity()
+        return model
+
+    @classmethod
+    def from_checkpoint(cls,
+                        cfg: TrainingConfig,
+                        ckpt_path: str,
+                        strict=False,
+                        compile=False):
+        model = GPTRewardModel(cfg)
+        if compile:
+            model = torch.compile(model)
+        checkpoint = torch.load(ckpt_path, map_location="cpu")
+        model.load_state_dict(checkpoint["model_state_dict"], strict=strict)
+        return model
+
+    @classmethod
+    def from_pretrained(cls, cfg: TrainingConfig):
+        model = GPTRewardModel(cfg)
+        model.backbone = GPT.from_pretrained(cfg)
+        model.backbone.lm_head = nn.Identity()
+        # model_states_keys = model.state_dict().keys()
+        # with open('rm_states_keys.txt', 'w') as fp:
+        #     for k in model_states_keys:
+        #         fp.write(k + '\n')
+        return model
