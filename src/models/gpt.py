@@ -111,7 +111,6 @@ class MaskedMultiheadSelfAttention(nn.Module):
         y = self.output_dropout(y)
         return y
 
-
 class FeedForwardNetworks(nn.Module):
 
     def __init__(self, cfg: TrainingConfig) -> None:
@@ -145,7 +144,6 @@ class FeedForwardNetworks(nn.Module):
         y = self.dropout(x)
         return y
 
-
 class TransformerDecoderBlock(nn.Module):
 
     def __init__(self, cfg: TrainingConfig) -> None:
@@ -169,7 +167,6 @@ class TransformerDecoderBlock(nn.Module):
         x = self.ffn(x)
         y = identity2 + x
         return y
-
 
 class TransformerDecoder(nn.Module):
 
@@ -204,7 +201,6 @@ class TransformerDecoder(nn.Module):
         y = self.ln(x)
         return y
 
-
 class GPT(nn.Module):
 
     def __init__(self, cfg: TrainingConfig) -> None:
@@ -237,6 +233,10 @@ class GPT(nn.Module):
                         cfg: TrainingConfig,
                         ckpt_path: str,
                         compile=False):
+        """
+        Load model from checkpoint
+        """
+        
         model = GPT(cfg)
         if compile:
             model = torch.compile(model)
