@@ -20,12 +20,18 @@ TransformerDecoder
             # token_embedding_layer
             # postion_embedding_layer
             # input_dropout
-            # decoder_blocks = nn.ModuleList([TransformerDecoderBlock(cfg) for _ in range(cfg.n_layers)])
+            # decoder_blocks = [TransformerDecoderBlock(cfg) for _ in range(cfg.n_layers)]
             # ln = LayerNorm
         
     forward(x, attention_mask):
-        
+        # pos, token_embeddings, pos_embeddings
+        x = input_dropout(token_embeddings + pos_embeddings)
 
+        # Stack N blocks
+        for block in self.decoder_blocks:
+            x = block(x)
+
+        y = ln(x)
 
     TransformerDecoderBlock
         __init__()
