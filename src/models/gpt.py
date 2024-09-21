@@ -402,6 +402,20 @@ class GPT(nn.Module):
 
         return idx
 
+class  GPTActor(GPT):
+    def __init__(self, cfg: TrainingConfig) -> None:
+        super().__init__(cfg)
+        self.cfg = cfg
+    
+    def forward_actor(self, x, attention_mask, num_actions=0):
+        # x = (B, T)
+
+        return "Log probabilities"
+    
+    def batch_generate():
+        
+
+
 
 class GPTRewardModel(nn.Module):
 
@@ -478,3 +492,4 @@ class GPTRewardModel(nn.Module):
         #     for k in model_states_keys:
         #         fp.write(k + '\n')
         return model
+
