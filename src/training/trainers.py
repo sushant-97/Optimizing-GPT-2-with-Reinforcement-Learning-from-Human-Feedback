@@ -177,7 +177,6 @@ class Experience:
     values: torch.Tensor
     action_mask: torch.Tensor
 
-
 class PPOTrainer(Trainer):
 
     def __init__(self, cfg: TrainingConfig, actor: GPTActor, critic: GPTCritic,
