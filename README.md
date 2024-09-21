@@ -4,8 +4,8 @@ ChatGPT has three stages, which is based on InstructGPT which was the last open 
 In second stage we perform reward model traning and in last stage we perform RL with human feeback with Proximal Policy Gradient. Here's a diagram from the InstructGPT paper:
 
 ### To Do
-[]Add deep speed optimizations
-[]serve chatapi
+- [] Add deep speed optimizations
+- [] serve chat based application
 
 # Directory
 ```bash
